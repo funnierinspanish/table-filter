@@ -1,0 +1,5 @@
+ Name     │ Apartment Number │ Roommate Count  │ Preferred Lunch  │ Got preferred lunch  │ Last time eaten
+----------+------------------+----------------+------------------+-----------------------+----------------
+ george   │ 202              │  0             │ soup             │ failed                │ 5d
+ jerry    │ 304              │  1             │ soup             │ failed                │ 15d 
+ the guy  │ 101              │  2             │ soup             │ succeeded             │ 10m
