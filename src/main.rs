@@ -1,10 +1,10 @@
 use chrono::{Duration, Utc};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use regex::Regex;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::fs;
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -19,8 +19,11 @@ struct Cli {
     #[arg(long = "headers-row")]
     headers_row: Option<usize>,
 
-    #[arg(long = "skip")]
-    skip: Option<usize>,
+    #[arg(long = "skip-lines")]
+    skip_lines: Option<usize>,
+
+    #[arg(long = "skip-results")]
+    skip_results: Option<usize>,
 
     #[arg(long = "print")]
     print: Option<String>,
@@ -39,6 +42,9 @@ struct Cli {
 
     #[arg(long = "transform")]
     transform: Option<String>,
+
+    #[arg(long = "show-headers")]
+    show_headers: bool,
 }
 
 #[derive(Subcommand, Debug)]
@@ -75,7 +81,6 @@ fn load_config() -> HashMap<String, Value> {
     let path = config_path();
     if path.exists() {
         let content = fs::read_to_string(path).expect("Failed to read config file");
-        println!("Config file found");
         serde_json::from_str(&content).unwrap_or_default()
     } else {
         HashMap::new()
@@ -229,17 +234,32 @@ fn main() {
         Value::Null
     };
 
+    // Show help if no meaningful arguments provided
+    if cli.profile.is_none() 
+        && cli.headers_row.is_none() 
+        && cli.print.is_none() 
+        && profile_data.is_null() {
+        
+        let mut cmd = Cli::command();
+        cmd.print_help().unwrap();
+        io::stdout().flush().expect("Failed to flush stdout");
+        std::process::exit(1);
+    }
+
     let headers_row = cli
         .headers_row
-        .or_else(|| profile_data["headers-row"].as_u64().map(|v| v as usize))
-        .unwrap_or_else(|| {
-            eprintln!("Missing --headers-row");
-            std::process::exit(1)
-        });
-    let skip = cli
-        .skip
-        .or_else(|| profile_data["skip"].as_u64().map(|v| v as usize))
+        .or_else(|| profile_data["headers-row"].as_u64().map(|v| v as usize)).expect("Failed to get headers row");
+
+    let skip_lines_count = cli
+        .skip_lines
+        .or_else(|| profile_data["skip-lines"].as_u64().map(|v| v as usize))
         .unwrap_or(0);
+
+    let skip_results_count = cli
+        .skip_results
+        .or_else(|| profile_data["skip-results"].as_u64().map(|v| v as usize))
+        .unwrap_or(0);
+
     let print: Vec<String> = cli
         .print
         .map(|p| p.split(',').map(|s| s.trim().to_string()).collect())
@@ -295,10 +315,9 @@ fn main() {
         .map(|t| parse_transform_arg(&t, &header_map))
         .unwrap_or_default();
     let sort_col = sort_by.map(|s| parse_col_identifier(&s, &header_map));
-
     let mut rows: Vec<Vec<String>> = lines
         .iter()
-        .skip(skip)
+        .skip(headers_row + 1 + skip_lines_count)  // Skip header row + separator row + additional skip lines
         .map(|line| {
             line.split(&separator)
                 .map(|s| s.trim().to_string())
@@ -337,6 +356,15 @@ fn main() {
         });
     }
 
+    // Apply skip_results after sorting
+    if skip_results_count > 0 {
+        if skip_results_count < rows.len() {
+            rows = rows.into_iter().skip(skip_results_count).collect();
+        } else {
+            rows.clear();
+        }
+    }
+
     // Compute max widths
     let mut col_widths: HashMap<usize, usize> = HashMap::new();
     for &col in &print_cols {
@@ -349,37 +377,47 @@ fn main() {
         col_widths.insert(col, std::cmp::max(max, header_len) + 2);
     }
 
-    // Print header
-    for (i, &col) in print_cols.iter().enumerate() {
-        let name = &headers[col];
-        print!("{:width$}", name, width = col_widths[&col]);
-        if i < print_cols.len() - 1 {
-            print!("  |  ");
-        }
-    }
-    println!();
+    // Collect all output into a string buffer for better watch compatibility
+    let mut output = String::new();
 
-    // Separator row
-    for (i, &col) in print_cols.iter().enumerate() {
-        print!("{:-<width$}", "", width = col_widths[&col] + 2);
-        if i < print_cols.len() - 1 {
-            print!("+");
+    // Print header
+    if cli.show_headers {
+        for (i, &col) in print_cols.iter().enumerate() {
+            let name = &headers[col];
+            output.push_str(&format!("{:width$}", name, width = col_widths[&col]));
+            if i < print_cols.len() - 1 {
+                output.push_str("  |  ");
+            }
         }
+        output.push('\n');
+
+        // Separator row
+        for (i, &col) in print_cols.iter().enumerate() {
+            output.push_str(&format!("{:-<width$}", "", width = col_widths[&col] + 2));
+            if i < print_cols.len() - 1 {
+                output.push('+');
+            }
+        }
+        output.push('\n');
     }
-    println!();
 
     // Rows
     for row in rows {
         for (i, &col) in print_cols.iter().enumerate() {
-            print!(
+            output.push_str(&format!(
                 "{:width$}",
                 row.get(col).unwrap_or(&"".to_string()),
                 width = col_widths[&col]
-            );
+            ));
             if i < print_cols.len() - 1 {
-                print!("  |  ");
+                output.push_str("  |  ");
             }
         }
-        println!();
+        output.push('\n');
     }
+
+    // Print all output at once
+    print!("{}", output);
+    io::stdout().flush().expect("Failed to flush stdout");
+    std::process::exit(0);
 }
