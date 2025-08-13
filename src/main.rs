@@ -43,8 +43,8 @@ struct Cli {
     #[arg(long = "transform")]
     transform: Option<String>,
 
-    #[arg(long = "show-headers")]
-    show_headers: bool,
+    #[arg(long = "no-headers", action = clap::ArgAction::SetTrue)]
+    no_headers: bool,
 }
 
 #[derive(Subcommand, Debug)]
@@ -289,6 +289,11 @@ fn main() {
             .map(|v| Value::Object(v.clone()).to_string())
     });
     let separator = cli.separator.clone();
+    let show_headers = if cli.no_headers || profile_data["no-headers"].as_bool().unwrap_or(false) {
+        false
+    } else {
+        true
+    };
 
     let stdin = io::stdin();
     let lines: Vec<String> = stdin.lock().lines().map_while(Result::ok).collect();
@@ -381,7 +386,7 @@ fn main() {
     let mut output = String::new();
 
     // Print header
-    if cli.show_headers {
+    if show_headers {
         for (i, &col) in print_cols.iter().enumerate() {
             let name = &headers[col];
             output.push_str(&format!("{:width$}", name, width = col_widths[&col]));
