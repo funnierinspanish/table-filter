@@ -1,10 +1,9 @@
-PROGRAM ?= table-filter
-NEWNAME ?= tf
+PROGRAM_NAME ?= tf
 DEST    ?= $(HOME)/.local/bin
 BUILD_FLAGS ?= --release
 
 PROFILE := $(if $(findstring --release,$(BUILD_FLAGS)),release,debug)
-BIN     := ./target/$(PROFILE)/$(PROGRAM)
+BIN     := ./target/$(PROFILE)/$(PROGRAM_NAME)
 
 .PHONY: all build install reinstall uninstall run watch view pathcheck
 
@@ -16,29 +15,29 @@ build:
 
 install: build
 	mkdir -p "$(DEST)"
-	cp "$(BIN)" "$(DEST)/$(NEWNAME)"
-	chmod +x "$(DEST)/$(NEWNAME)"
-	@echo "✅ Installed: $(DEST)/$(NEWNAME)"
+	cp "$(BIN)" "$(DEST)/$(PROGRAM_NAME)"
+	chmod +x "$(DEST)/$(PROGRAM_NAME)"
+	@echo "✅ Installed: $(DEST)/$(PROGRAM_NAME)"
 	@$(MAKE) -s pathcheck
 
 reinstall: uninstall install
 
 uninstall:
-	@rm -f "$(DEST)/$(NEWNAME)" && echo "🗑️  Removed: $(DEST)/$(NEWNAME)" || true
+	@rm -f "$(DEST)/$(PROGRAM_NAME)" && echo "🗑️  Removed: $(DEST)/$(PROGRAM_NAME)" || true
 
 run: build
 	"$(BIN)"
 
-# Rebuild on changes and re-copy to DEST/NEWNAME using cargo-watch (optional)
+# Rebuild on changes and re-copy to DEST/PROGRAM_NAME using cargo-watch (optional)
 # Requires: cargo install cargo-watch
 watch:
 	@command -v cargo-watch >/dev/null 2>&1 || { echo "Install cargo-watch: cargo install cargo-watch"; exit 1; }
-	cargo watch -x "build $(BUILD_FLAGS)" -s 'mkdir -p "$(DEST)"; cp "$(BIN)" "$(DEST)/$(NEWNAME)"; echo "🔁 Updated $(DEST)/$(NEWNAME)"'
+	cargo watch -x "build $(BUILD_FLAGS)" -s 'mkdir -p "$(DEST)"; cp "$(BIN)" "$(DEST)/$(PROGRAM_NAME)"; echo "🔁 Updated $(DEST)/$(PROGRAM_NAME)"'
 
 # Quickly watch the installed program's output every second
 view:
 	@command -v watch >/dev/null 2>&1 || { echo "Install watch (procps-ng)."; exit 1; }
-	watch -n 1 "$(DEST)/$(NEWNAME)"
+	watch -n 1 "$(DEST)/$(PROGRAM_NAME)"
 
 # Warn if ~/.local/bin isn’t on PATH
 pathcheck:

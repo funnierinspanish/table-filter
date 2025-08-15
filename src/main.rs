@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(name = "table_filter", about = "Filter and format CLI tabular output")]
-struct Cli {
+struct CLI {
     #[command(subcommand)]
     command: Option<Commands>,
 
@@ -179,7 +179,7 @@ fn parse_age_to_date(value: &str) -> String {
 }
 
 fn main() {
-    let cli = Cli::parse();
+    let cli = CLI::parse();
 
     if let Some(Commands::Config { cmd }) = &cli.command {
         let mut config = load_config();
@@ -240,7 +240,7 @@ fn main() {
         && cli.print.is_none() 
         && profile_data.is_null() {
         
-        let mut cmd = Cli::command();
+        let mut cmd = CLI::command();
         cmd.print_help().unwrap();
         io::stdout().flush().expect("Failed to flush stdout");
         std::process::exit(1);
