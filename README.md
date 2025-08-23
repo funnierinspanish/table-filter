@@ -18,21 +18,67 @@ Table Filter is a simple program for filtering data in a table-like structure fr
 cargo install --git https://github.com/funnierinspanish/table-filter.git
 ```
 
-### Option 2: Build from Source
+### Option 2: Download Pre-built Binaries
+
+Download the latest release for your platform from the [GitHub releases page](https://github.com/funnierinspanish/table-filter/releases):
+
+**Linux (x86_64):**
 
 ```bash
-git clone https://github.com/funnierinspanish/table-filter.git
-cd table-filter
-cargo build --release
-# Binary will be in target/release/table-filter
+# Download and extract
+curl -L https://github.com/funnierinspanish/table-filter/releases/latest/download/tf-x86_64-unknown-linux-gnu.tar.gz | tar xz
+
+# Make executable and move to PATH
+chmod +x tf-x86_64-unknown-linux-gnu
+sudo mv tf-x86_64-unknown-linux-gnu /usr/local/bin/tf
 ```
 
-### Option 3: Install via Makefile
+**Linux (x86_64, static musl):**
+
+```bash
+# Download and extract (no glibc dependencies)
+curl -L https://github.com/funnierinspanish/table-filter/releases/latest/download/tf-x86_64-unknown-linux-musl.tar.gz | tar xz
+
+# Make executable and move to PATH
+chmod +x tf-x86_64-unknown-linux-musl
+sudo mv tf-x86_64-unknown-linux-musl /usr/local/bin/tf
+```
+
+**macOS (Intel):**
+
+```bash
+# Download and extract
+curl -L https://github.com/funnierinspanish/table-filter/releases/latest/download/tf-x86_64-apple-darwin.tar.gz | tar xz
+
+# Make executable and move to PATH
+chmod +x tf-x86_64-apple-darwin
+sudo mv tf-x86_64-apple-darwin /usr/local/bin/tf
+```
+
+**macOS (Apple Silicon):**
+
+```bash
+# Download and extract
+curl -L https://github.com/funnierinspanish/table-filter/releases/latest/download/tf-aarch64-apple-darwin.tar.gz | tar xz
+
+# Make executable and move to PATH
+chmod +x tf-aarch64-apple-darwin
+sudo mv tf-aarch64-apple-darwin /usr/local/bin/tf
+```
+
+**Windows:**
+
+1. Download `tf-x86_64-pc-windows-msvc.zip` from the [releases page](https://github.com/funnierinspanish/table-filter/releases)
+2. Extract the ZIP file
+3. Move `tf.exe` to a directory in your PATH
+
+### Option 3: Build from Source
 
 ```bash
 git clone https://github.com/funnierinspanish/table-filter.git
 cd table-filter
-make install
+cargo build --release && cargo install --path .
+# The binary will be in ~/.cargo/bin/tf
 ```
 
 This will install the binary as `tf` in `~/.local/bin/` (or specify `DEST` and `NEWNAME` variables).
@@ -52,44 +98,44 @@ Example file [test_data.txt](./test_data.txt):
 Filter and print rows where the first column contains "george":
 
 ```bash
-cat test_data.txt | tf --headers-row 1 --print "Name,Apartment Number" --match '{"Name": "george"}'
+cat test_data.txt | tf --headers-row 1 --cols "Name,Apartment Number" --match '{"Name": "george"}'
 ```
 
 Print only specific columns:
 
 ```bash
-cat test_data.txt | tf --headers-row 1 --print "Name,Preferred Lunch"
+cat test_data.txt | tf --headers-row 1 --cols "Name,Preferred Lunch"
 ```
 
 Sort by a column:
 
 ```bash
-cat test_data.txt | tf --headers-row 1 --print "Name,Last time eaten" --sort-by "Last time eaten" --sort-order desc
+cat test_data.txt | tf --headers-row 1 --cols "Name,Last time eaten" --sort-by "Last time eaten" --sort-order desc
 ```
 
 Apply a transformation:
 
 ```bash
-cat test_data.txt | tf --headers-row 1 --print "Name" --transform '{"Last time eaten": "$AGE_TO_DATE"}'
+cat test_data.txt | tf --headers-row 1 --cols "Name" --transform '{"Last time eaten": "$AGE_TO_DATE"}'
 ```
 
 Skip the first 2 lines of input and show results without headers:
 
 ```bash
-cat test_data.txt | tf --headers-row 1 --skip-lines 2 --print "Name,Preferred Lunch" --no-headers
+cat test_data.txt | tf --headers-row 1 --skip-lines 2 --cols "Name,Preferred Lunch" --no-headers
 ```
 
 Get only the top 2 results after sorting:
 
 ```bash
-cat test_data.txt | tf --headers-row 1 --print "Name,Last time eaten" --sort-by "Last time eaten" --skip-results 0 --sort-order desc
+cat test_data.txt | tf --headers-row 1 --cols "Name,Last time eaten" --sort-by "Last time eaten" --skip-results 0 --sort-order desc
 ```
 
 ## Arguments
 
 - `--headers-row <N>`: Row number (1-based) containing column headers (**required**)
 - `-p, --profile <PROFILE_NAME>`: Use a saved profile with predefined settings in `~/.config/table-formatter.config.json`
-- `--print <cols>`: Comma-separated list of columns to print (by name or `$N` for index)
+- `--cols <cols>`: Comma-separated list of columns to print (by name or `$N` for index)
 - `--match <json>`: JSON object mapping columns to values to filter (supports arrays)
 - `--sort-by <col>`: Column to sort by
 - `--sort-order <asc|desc>`: Sort order (default: asc)
@@ -107,7 +153,7 @@ You can save and load profiles for common settings.
 
 ```bash
 tf config set myprofile.headers-row=1
-tf config set myprofile.print='["Name","Last time eaten"]'
+tf config set myprofile.cols='["Name","Last time eaten"]'
 ```
 
 ### Use a profile
@@ -133,7 +179,7 @@ Profiles are stored in `~/.config/table-formatter.config.json`.
 ## Example: Full Command
 
 ```bash
-cat test_data.txt | tf --headers-row 1 --print '"$1","Got preferred lunch","$6"' --match '{"Got preferred lunch": "succeeded"}' --sort-by '$6' --sort-order desc
+cat test_data.txt | tf --headers-row 1 --cols '"$1","Got preferred lunch","$6"' --match '{"Got preferred lunch": "succeeded"}' --sort-by '$6' --sort-order desc
 ```
 
 ---

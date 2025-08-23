@@ -25,8 +25,8 @@ struct CLI {
     #[arg(long = "skip-results")]
     skip_results: Option<usize>,
 
-    #[arg(long = "print")]
-    print: Option<String>,
+    #[arg(short = 'c', long = "cols")]
+    cols: Option<String>,
 
     #[arg(long = "match")]
     matcher: Option<String>,
@@ -237,7 +237,7 @@ fn main() {
     // Show help if no meaningful arguments provided
     if cli.profile.is_none() 
         && cli.headers_row.is_none() 
-        && cli.print.is_none() 
+        && cli.cols.is_none() 
         && profile_data.is_null() {
         
         let mut cmd = CLI::command();
@@ -260,18 +260,18 @@ fn main() {
         .or_else(|| profile_data["skip-results"].as_u64().map(|v| v as usize))
         .unwrap_or(0);
 
-    let print: Vec<String> = cli
-        .print
+    let cols: Vec<String> = cli
+        .cols
         .map(|p| p.split(',').map(|s| s.trim().to_string()).collect())
         .or_else(|| {
-            profile_data["print"].as_array().map(|arr| {
+            profile_data["cols"].as_array().map(|arr| {
                 arr.iter()
                     .filter_map(|v| v.as_str().map(|s| s.to_string()))
                     .collect()
             })
         })
         .unwrap_or_else(|| {
-            eprintln!("Missing --print");
+            eprintln!("Missing --cols");
             std::process::exit(1)
         });
     let matcher = cli.matcher.or_else(|| {
@@ -311,7 +311,7 @@ fn main() {
         .map(|(i, h)| (h.clone(), i))
         .collect();
 
-    let print_cols: Vec<usize> = print
+    let row_cols: Vec<usize> = cols
         .iter()
         .map(|col| parse_col_identifier(col, &header_map))
         .collect();
@@ -342,7 +342,7 @@ fn main() {
         })
         // If the row has no values in the columns we want to print, skip it
         .filter(|row| {
-            print_cols
+            row_cols
                 .iter()
                 .any(|&col| row.get(col).is_some_and(|v| !v.is_empty()))
         })
@@ -372,7 +372,7 @@ fn main() {
 
     // Compute max widths
     let mut col_widths: HashMap<usize, usize> = HashMap::new();
-    for &col in &print_cols {
+    for &col in &row_cols {
         let max = rows
             .iter()
             .map(|r| r.get(col).map_or(0, |v| v.len()))
@@ -387,19 +387,19 @@ fn main() {
 
     // Print header
     if show_headers {
-        for (i, &col) in print_cols.iter().enumerate() {
+        for (i, &col) in row_cols.iter().enumerate() {
             let name = &headers[col];
             output.push_str(&format!("{:width$}", name, width = col_widths[&col]));
-            if i < print_cols.len() - 1 {
+            if i < row_cols.len() - 1 {
                 output.push_str("  |  ");
             }
         }
         output.push('\n');
 
         // Separator row
-        for (i, &col) in print_cols.iter().enumerate() {
+        for (i, &col) in row_cols.iter().enumerate() {
             output.push_str(&format!("{:-<width$}", "", width = col_widths[&col] + 2));
-            if i < print_cols.len() - 1 {
+            if i < row_cols.len() - 1 {
                 output.push('+');
             }
         }
@@ -408,13 +408,13 @@ fn main() {
 
     // Rows
     for row in rows {
-        for (i, &col) in print_cols.iter().enumerate() {
+        for (i, &col) in row_cols.iter().enumerate() {
             output.push_str(&format!(
                 "{:width$}",
                 row.get(col).unwrap_or(&"".to_string()),
                 width = col_widths[&col]
             ));
-            if i < print_cols.len() - 1 {
+            if i < row_cols.len() - 1 {
                 output.push_str("  |  ");
             }
         }

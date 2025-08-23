@@ -1,0 +1,174 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  # The name of the binary produced by 'cargo build'.
+  # Change this to match the name in your Cargo.toml.
+  CARGO_BINARY_NAME: tf
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # This job builds the application for each target in the matrix.
+  build:
+    name: Build for ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # We build for all targets in parallel.
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: x86_64-apple-darwin
+            os: macos
+          - target: aarch64-apple-darwin
+            os: macos
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Add this step to cache the Rust dependencies and build outputs.
+      # This will significantly speed up the build process on subsequent runs.
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # For Linux builds, we may need to install cross-compilation tools.
+      - name: Install cross-compilation tools (Linux)
+        if: runner.os == 'Linux' && matrix.target != 'x86_64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update -y
+          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
+            # Install the linker for the aarch64 target.
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+          elif [[ "${{ matrix.target }}" == "x86_64-unknown-linux-musl" ]]; then
+            # Install the musl C library toolchain.
+            sudo apt-get install -y musl-tools
+          fi
+
+      # For aarch64-linux, we need to tell Cargo which linker to use.
+      - name: Configure Cargo for cross-compilation (aarch64-linux)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          mkdir -p .cargo
+          echo '[target.aarch64-unknown-linux-gnu]' >> .cargo/config.toml
+          echo 'linker = "aarch64-linux-gnu-gcc"' >> .cargo/config.toml
+
+      - name: Build release binary
+        # We use --locked to ensure the build is reproducible.
+        run: cargo build --release --target ${{ matrix.target }} --locked
+
+      - name: Prepare package for release
+        shell: bash
+        run: |
+          # Define paths and names for clarity.
+          source_dir="target/${{ matrix.target }}/release"
+          extension=""
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            extension=".exe"
+          fi
+          source_file="$source_dir/${{ env.CARGO_BINARY_NAME }}${extension}"
+          
+          # The final name for the binary inside the archive.
+          binary_name="${{ env.CARGO_BINARY_NAME }}-${{ matrix.target }}${extension}"
+          
+          # The final name for the archive file.
+          archive_name=""
+          
+          echo "Source file: $source_file"
+          echo "Final binary name: $binary_name"
+
+          # Strip debug symbols on Linux and macOS to reduce file size.
+          if [[ "${{ matrix.os }}" != "windows-latest" ]]; then
+            echo "Stripping binary..."
+            if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
+              aarch64-linux-gnu-strip "$source_file"
+            else
+              strip "$source_file"
+            fi
+          fi
+
+          # Rename the binary to its final platform-specific name.
+          mv "$source_file" "$binary_name"
+
+          # Package the binary into a compressed archive.
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            archive_name="${binary_name}.zip"
+            7z a "$archive_name" "$binary_name"
+          else
+            archive_name="${binary_name}.tar.gz"
+            tar -czvf "$archive_name" "$binary_name"
+          fi
+
+          # Pass the final archive path to the next step.
+          echo "ARTIFACT_PATH=${archive_name}" >> $GITHUB_ENV
+          
+          echo "Created archive: $archive_name"
+          ls -l
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          # Use a unique name for each platform's artifact
+          name: release-artifact-${{ matrix.target }}
+          path: ${{ env.ARTIFACT_PATH }}
+          if-no-files-found: error
+
+  # This job runs after all 'build' jobs are complete.
+  # It creates the GitHub release and uploads all the assets.
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      # This permission is required to create a release and upload assets.
+      contents: write
+    steps:
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # Download all artifacts (this will create separate folders for each)
+          path: release-assets
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          # Move all artifacts to a single directory
+          mkdir -p final-assets
+          find release-assets -name "*.tar.gz" -o -name "*.zip" | while read file; do
+            mv "$file" final-assets/
+          done
+          
+          cd final-assets
+          # Create a checksum file for all the archives.
+          sha256sum * > ../checksums.txt
+          cd ..
+          echo "--- Release Assets ---"
+          ls -l final-assets/
+          echo "--- Checksums ---"
+          cat checksums.txt
+
+      - name: Publish release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          # The body of the release. You could also point to a changelog file.
+          body: "Official release for ${{ github.ref_name }}. See attached assets for binaries."
+          # Upload all files from the assets directory and the checksums file.
+          files: |
+            final-assets/*
+            checksums.txt
