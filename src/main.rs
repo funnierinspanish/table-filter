@@ -8,8 +8,8 @@ use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
-#[command(name = "table_filter", about = "Filter and format CLI tabular output")]
-struct CLI {
+#[command(name = "table_filter", about = "Filter and format CLi tabular output")]
+struct CLi {
     #[command(subcommand)]
     command: Option<Commands>,
 
@@ -168,18 +168,18 @@ fn apply_transformers(row: &mut [String], transforms: &HashMap<usize, Vec<String
 fn parse_age_to_date(value: &str) -> String {
     let lowercase = value.to_lowercase();
     let re = Regex::new(r"(\d+)[\s]*[a-z]*").unwrap();
-    if let Some(cap) = re.captures(&lowercase) {
-        if let Some(num) = cap.get(1) {
-            let number: i64 = num.as_str().parse().unwrap_or(0);
-            let timestamp = Utc::now() - Duration::days(number);
-            return timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
-        }
+    if let Some(cap) = re.captures(&lowercase)
+        && let Some(num) = cap.get(1)
+    {
+        let number: i64 = num.as_str().parse().unwrap_or(0);
+        let timestamp = Utc::now() - Duration::days(number);
+        return timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
     }
     value.to_string()
 }
 
 fn main() {
-    let cli = CLI::parse();
+    let cli = CLi::parse();
 
     if let Some(Commands::Config { cmd }) = &cli.command {
         let mut config = load_config();
@@ -235,12 +235,12 @@ fn main() {
     };
 
     // Show help if no meaningful arguments provided
-    if cli.profile.is_none() 
-        && cli.headers_row.is_none() 
-        && cli.cols.is_none() 
-        && profile_data.is_null() {
-        
-        let mut cmd = CLI::command();
+    if cli.profile.is_none()
+        && cli.headers_row.is_none()
+        && cli.cols.is_none()
+        && profile_data.is_null()
+    {
+        let mut cmd = CLi::command();
         cmd.print_help().unwrap();
         io::stdout().flush().expect("Failed to flush stdout");
         std::process::exit(1);
@@ -248,7 +248,8 @@ fn main() {
 
     let headers_row = cli
         .headers_row
-        .or_else(|| profile_data["headers-row"].as_u64().map(|v| v as usize)).expect("Failed to get headers row");
+        .or_else(|| profile_data["headers-row"].as_u64().map(|v| v as usize))
+        .expect("Failed to get headers row");
 
     let skip_lines_count = cli
         .skip_lines
@@ -289,11 +290,7 @@ fn main() {
             .map(|v| Value::Object(v.clone()).to_string())
     });
     let separator = cli.separator.clone();
-    let show_headers = if cli.no_headers || profile_data["no-headers"].as_bool().unwrap_or(false) {
-        false
-    } else {
-        true
-    };
+    let show_headers = !(cli.no_headers || profile_data["no-headers"].as_bool().unwrap_or(false));
 
     let stdin = io::stdin();
     let lines: Vec<String> = stdin.lock().lines().map_while(Result::ok).collect();
@@ -322,7 +319,7 @@ fn main() {
     let sort_col = sort_by.map(|s| parse_col_identifier(&s, &header_map));
     let mut rows: Vec<Vec<String>> = lines
         .iter()
-        .skip(headers_row + 1 + skip_lines_count)  // Skip header row + separator row + additional skip lines
+        .skip(headers_row + 1 + skip_lines_count) // Skip header row + separator row + additional skip lines
         .map(|line| {
             line.split(&separator)
                 .map(|s| s.trim().to_string())
