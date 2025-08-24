@@ -44,28 +44,6 @@ chmod +x tf-x86_64-unknown-linux-musl
 sudo mv tf-x86_64-unknown-linux-musl /usr/local/bin/tf
 ```
 
-**macOS (Intel):**
-
-```bash
-# Download and extract
-curl -L https://github.com/funnierinspanish/table-filter/releases/latest/download/tf-x86_64-apple-darwin.tar.gz | tar xz
-
-# Make executable and move to PATH
-chmod +x tf-x86_64-apple-darwin
-sudo mv tf-x86_64-apple-darwin /usr/local/bin/tf
-```
-
-**macOS (Apple Silicon):**
-
-```bash
-# Download and extract
-curl -L https://github.com/funnierinspanish/table-filter/releases/latest/download/tf-aarch64-apple-darwin.tar.gz | tar xz
-
-# Make executable and move to PATH
-chmod +x tf-aarch64-apple-darwin
-sudo mv tf-aarch64-apple-darwin /usr/local/bin/tf
-```
-
 **Windows:**
 
 1. Download `tf-x86_64-pc-windows-msvc.zip` from the [releases page](https://github.com/funnierinspanish/table-filter/releases)
