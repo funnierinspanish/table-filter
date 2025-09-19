@@ -16,10 +16,10 @@ struct CLi {
     #[arg(long, short)]
     profile: Option<String>,
 
-    #[arg(long = "headers-row")]
+    #[arg(short = 'H', long = "headers-row")]
     headers_row: Option<usize>,
 
-    #[arg(long = "skip-lines")]
+    #[arg(short = 's', long = "skip-lines")]
     skip_lines: Option<usize>,
 
     #[arg(long = "skip-results")]
@@ -28,10 +28,10 @@ struct CLi {
     #[arg(short = 'c', long = "cols")]
     cols: Option<String>,
 
-    #[arg(long = "match")]
+    #[arg(short = 'm', long = "match")]
     matcher: Option<String>,
 
-    #[arg(long = "separator", default_value = "│")]
+    #[arg(short = 'f', long = "separator", default_value = "│")]
     separator: String,
 
     #[arg(long = "sort-by")]
