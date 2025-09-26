@@ -1,3 +1,7 @@
+fn exit_with_error(msg: &str) -> ! {
+    eprintln!("Error: {}", msg);
+    std::process::exit(1);
+}
 use chrono::{Duration, Utc};
 use clap::{CommandFactory, Parser, Subcommand};
 use regex::Regex;
@@ -13,37 +17,40 @@ struct CLi {
     #[command(subcommand)]
     command: Option<Commands>,
 
-    #[arg(long, short)]
+    #[arg(long, short, help="Profile name from the config file to use")]
     profile: Option<String>,
 
-    #[arg(short = 'H', long = "headers-row")]
+    #[arg(short = 'H', long = "headers-row", help="1-based row number containing the headers", default_value = "1")]
     headers_row: Option<usize>,
 
-    #[arg(short = 's', long = "skip-lines")]
+    #[arg(short = 's', long = "skip-lines", help="Number of lines to skip after the header row")]
     skip_lines: Option<usize>,
 
-    #[arg(long = "skip-results")]
+    #[arg(short = 'r', long = "skip-results", help="Number of results to skip")]
     skip_results: Option<usize>,
 
-    #[arg(short = 'c', long = "cols")]
+    #[arg(short = 'c', long = "cols", help="Comma-separated list of column names to display")]
     cols: Option<String>,
 
-    #[arg(short = 'm', long = "match")]
-    matcher: Option<String>,
-
-    #[arg(short = 'f', long = "separator", default_value = "│")]
+    #[arg(short = 'f', long = "separator", help="Character used to separate columns. The 'Box Drawings Light Vertical' character is used by default", default_value = "│")]
     separator: String,
 
-    #[arg(long = "sort-by")]
+    #[arg(short = 'm', long = "match", help="JSON object mapping column names to a string or list of strings to match: {\"COLUMN_NAME\": \"value\"}")]
+    matcher: Option<String>,
+    
+    #[arg(short = 'q', long = "quiet", help = "Only display a column named ID")]
+    quiet: bool,
+
+    #[arg(long = "sort-by", help="Column name to sort by")]
     sort_by: Option<String>,
 
-    #[arg(long = "sort-order", default_value = "asc")]
+    #[arg(long = "sort-order", help="Sort order (asc or desc)", default_value = "asc")]
     sort_order: String,
 
-    #[arg(long = "transform")]
+    #[arg(long = "transform", help="JSON object mapping column names to transformation functions. Supported functions: $AGE_TO_DATE, and $TO_LOWER")]
     transform: Option<String>,
 
-    #[arg(long = "no-headers", action = clap::ArgAction::SetTrue)]
+    #[arg(long = "no-headers", help="Don't display the headers row", action = clap::ArgAction::SetTrue)]
     no_headers: bool,
 }
 
@@ -96,11 +103,11 @@ fn save_config(data: &HashMap<String, Value>) {
 fn parse_col_identifier(ident: &str, header_map: &HashMap<String, usize>) -> usize {
     let trimmed = ident.trim_matches('"');
     if let Some(stripped) = trimmed.strip_prefix('$') {
-        stripped.parse::<usize>().expect("Invalid column number") - 1
+        stripped.parse::<usize>().unwrap_or_else(|_| exit_with_error("Invalid column number")) - 1
     } else {
         *header_map
-            .get(trimmed)
-            .unwrap_or_else(|| panic!("Column name '{}' not found in headers", trimmed))
+            .get(trimmed.to_uppercase().as_str())
+            .unwrap_or_else(|| exit_with_error(&format!("Column name '{}' not found in headers", trimmed)))
     }
 }
 
@@ -119,7 +126,7 @@ fn parse_match_arg(
                     .into_iter()
                     .map(|v| v.as_str().unwrap().to_string())
                     .collect(),
-                _ => panic!("--match values must be strings or lists of strings"),
+                _ => exit_with_error("--match values must be strings or lists of strings"),
             };
             matcher.insert(col_index, values);
         }
@@ -143,7 +150,7 @@ fn parse_transform_arg(
                     .into_iter()
                     .map(|v| v.as_str().unwrap().to_string())
                     .collect(),
-                _ => panic!("--transform values must be strings or arrays of strings"),
+                _ => exit_with_error("--transform values must be strings or arrays of strings"),
             };
             transforms.insert(col_index, ops);
         }
@@ -299,7 +306,7 @@ fn main() {
         .get(headers_row - 1)
         .expect("Invalid headers row")
         .split(&separator)
-        .map(|s| s.trim().to_string())
+        .map(|s| s.trim().to_string().to_uppercase())
         .collect();
 
     let header_map: HashMap<String, usize> = headers
