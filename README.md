@@ -22,26 +22,24 @@ cargo install --git https://github.com/funnierinspanish/table-filter.git
 
 Download the latest release for your platform from the [GitHub releases page](https://github.com/funnierinspanish/table-filter/releases):
 
+
 **Linux (x86_64):**
 
 ```bash
 # Download and extract
-curl -L https://github.com/funnierinspanish/table-filter/releases/latest/download/tf-x86_64-unknown-linux-gnu.tar.gz | tar xz
-
-# Make executable and move to PATH
-chmod +x tf-x86_64-unknown-linux-gnu
-sudo mv tf-x86_64-unknown-linux-gnu /usr/local/bin/tf
+curl -L https://github.com/funnierinspanish/table-filter/releases/download/v0.3.0/tf
+chmod +x ./tf
+sudo mv tf ~/./local/bin/tf
+# or depending on your system:
+#sudo mv tf /usr/local/bin/tf
 ```
 
-**Linux (x86_64, static musl):**
+**macOS (Apple Silicon, M1/M2):**
 
 ```bash
-# Download and extract (no glibc dependencies)
-curl -L https://github.com/funnierinspanish/table-filter/releases/latest/download/tf-x86_64-unknown-linux-musl.tar.gz | tar xz
-
-# Make executable and move to PATH
-chmod +x tf-x86_64-unknown-linux-musl
-sudo mv tf-x86_64-unknown-linux-musl /usr/local/bin/tf
+curl -L https://github.com/funnierinspanish/table-filter/releases/latest/download/tf-aarch64-apple-darwin.tar.gz | tar xz
+chmod +x tf-aarch64-apple-darwin
+sudo mv tf-aarch64-apple-darwin /usr/local/bin/tf
 ```
 
 **Windows:**
@@ -59,7 +57,7 @@ cargo build --release && cargo install --path .
 # The binary will be in ~/.cargo/bin/tf
 ```
 
-This will install the binary as `tf` in `~/.local/bin/` (or specify `DEST` and `NEWNAME` variables).
+This will install the binary as `tf` in `~/.local/bin/` (You can also specify a `DEST` and `NEWNAME` variable).
 
 ## Basic Usage
 
@@ -76,40 +74,42 @@ Example file [test_data.txt](./test_data.txt):
 Filter and print rows where the first column contains "george":
 
 ```bash
-cat test_data.txt | tf --headers-row 1 --cols "Name,Apartment Number" --match '{"Name": "george"}'
+cat test_data.txt | tf --cols "Name,Apartment Number" --match '{"Name": "george"}'
 ```
+
 
 Print only specific columns:
 
 ```bash
-cat test_data.txt | tf --headers-row 1 --cols "Name,Preferred Lunch"
+cat test_data.txt | tf --cols "Name,Preferred Lunch"
 ```
 
 Sort by a column:
 
 ```bash
-cat test_data.txt | tf --headers-row 1 --cols "Name,Last time eaten" --sort-by "Last time eaten" --sort-order desc
+cat test_data.txt | tf --cols "Name,Last time eaten" --sort-by "Last time eaten" --sort-order desc
 ```
 
 Apply a transformation:
 
 ```bash
-cat test_data.txt | tf --headers-row 1 --cols "Name" --transform '{"Last time eaten": "$AGE_TO_DATE"}'
+cat test_data.txt | tf --cols "Name" --transform '{"Last time eaten": "$AGE_TO_DATE"}'
 ```
 
 Skip the first 2 lines of input and show results without headers:
 
 ```bash
-cat test_data.txt | tf --headers-row 1 --skip-lines 2 --cols "Name,Preferred Lunch" --no-headers
+cat test_data.txt | tf --skip-lines 2 --cols "Name,Preferred Lunch" --no-headers
 ```
 
-Get only the top 2 results after sorting:
+Skip the first result after filtering/sorting:
 
 ```bash
-cat test_data.txt | tf --headers-row 1 --cols "Name,Last time eaten" --sort-by "Last time eaten" --skip-results 0 --sort-order desc
+cat test_data.txt | tf --cols "Name,Last time eaten" --sort-by "Last time eaten" --skip-results 1 --sort-order desc
 ```
 
 ## Arguments
+
 
 - `--headers-row <N>`: Row number (1-based) containing column headers (**required**)
 - `-p, --profile <PROFILE_NAME>`: Use a saved profile with predefined settings in `~/.config/table-formatter.config.json`
@@ -148,7 +148,7 @@ tf config get --profile myprofile
 
 ## Configuration
 
-Profiles are stored in `~/.config/table-formatter.config.json`.
+Profiles are stored in `~/.config/tf.config.json`.
 
 ## Transformations
 
@@ -157,7 +157,7 @@ Profiles are stored in `~/.config/table-formatter.config.json`.
 ## Example: Full Command
 
 ```bash
-cat test_data.txt | tf --headers-row 1 --cols '"$1","Got preferred lunch","$6"' --match '{"Got preferred lunch": "succeeded"}' --sort-by '$6' --sort-order desc
+cat test_data.txt | tf --cols '"$1","Got preferred lunch","$6"' --match '{"Got preferred lunch": "succeeded"}' --sort-by '$6' --sort-order desc
 ```
 
 ---
