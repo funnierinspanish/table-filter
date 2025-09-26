@@ -1,15 +1,17 @@
-fn exit_with_error(msg: &str) -> ! {
-    eprintln!("Error: {}", msg);
-    std::process::exit(1);
-}
-use chrono::{Duration, Utc};
+mod column_handler;
+mod config_handler;
+mod transformers_handler;
+mod utils;
+
+use column_handler::parse_col_identifier;
+use config_handler::{load_config, save_config};
+use transformers_handler::{apply_transformers, parse_transform_arg};
+use utils::exit_with_error;
+
 use clap::{CommandFactory, Parser, Subcommand};
-use regex::Regex;
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::fs;
 use std::io::{self, BufRead, Write};
-use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(name = "table_filter", about = "Filter and format CLi tabular output")]
@@ -17,37 +19,66 @@ struct CLi {
     #[command(subcommand)]
     command: Option<Commands>,
 
-    #[arg(long, short, help="Profile name from the config file to use")]
+    #[arg(long, short, help = "Profile name from the config file to use")]
     profile: Option<String>,
 
-    #[arg(short = 'H', long = "headers-row", help="1-based row number containing the headers", default_value = "1")]
+    #[arg(
+        short = 'H',
+        long = "headers-row",
+        help = "1-based row number containing the headers",
+        default_value = "1"
+    )]
     headers_row: Option<usize>,
 
-    #[arg(short = 's', long = "skip-lines", help="Number of lines to skip after the header row")]
+    #[arg(
+        short = 's',
+        long = "skip-lines",
+        help = "Number of lines to skip after the header row"
+    )]
     skip_lines: Option<usize>,
 
-    #[arg(short = 'r', long = "skip-results", help="Number of results to skip")]
+    #[arg(short = 'r', long = "skip-results", help = "Number of results to skip")]
     skip_results: Option<usize>,
 
-    #[arg(short = 'c', long = "cols", help="Comma-separated list of column names to display")]
+    #[arg(
+        short = 'c',
+        long = "cols",
+        help = "Comma-separated list of column names to display"
+    )]
     cols: Option<String>,
 
-    #[arg(short = 'f', long = "separator", help="Character used to separate columns. The 'Box Drawings Light Vertical' character is used by default", default_value = "│")]
+    #[arg(
+        short = 'f',
+        long = "separator",
+        help = "Character used to separate columns. The 'Box Drawings Light Vertical' character is used by default",
+        default_value = "│"
+    )]
     separator: String,
 
-    #[arg(short = 'm', long = "match", help="JSON object mapping column names to a string or list of strings to match: {\"COLUMN_NAME\": \"value\"}")]
+    #[arg(
+        short = 'm',
+        long = "match",
+        help = "JSON object mapping column names to a string or list of strings to match: {\"COLUMN_NAME\": \"value\"}"
+    )]
     matcher: Option<String>,
-    
+
     #[arg(short = 'q', long = "quiet", help = "Only display a column named ID")]
     quiet: bool,
 
-    #[arg(long = "sort-by", help="Column name to sort by")]
+    #[arg(long = "sort-by", help = "Column name to sort by")]
     sort_by: Option<String>,
 
-    #[arg(long = "sort-order", help="Sort order (asc or desc)", default_value = "asc")]
+    #[arg(
+        long = "sort-order",
+        help = "Sort order (asc or desc)",
+        default_value = "asc"
+    )]
     sort_order: String,
 
-    #[arg(long = "transform", help="JSON object mapping column names to transformation functions. Supported functions: $AGE_TO_DATE, and $TO_LOWER")]
+    #[arg(
+        long = "transform",
+        help = "JSON object mapping column names to transformation functions. Supported functions: $AGE_TO_DATE, and $TO_LOWER"
+    )]
     transform: Option<String>,
 
     #[arg(long = "no-headers", help="Don't display the headers row", action = clap::ArgAction::SetTrue)]
@@ -78,39 +109,6 @@ enum ConfigCmd {
     },
 }
 
-fn config_path() -> PathBuf {
-    dirs::config_dir()
-        .unwrap()
-        .join("table-formatter.config.json")
-}
-
-fn load_config() -> HashMap<String, Value> {
-    let path = config_path();
-    if path.exists() {
-        let content = fs::read_to_string(path).expect("Failed to read config file");
-        serde_json::from_str(&content).unwrap_or_default()
-    } else {
-        HashMap::new()
-    }
-}
-
-fn save_config(data: &HashMap<String, Value>) {
-    let path = config_path();
-    serde_json::to_writer_pretty(&fs::File::create(path).unwrap(), data)
-        .expect("Failed to write config file");
-}
-
-fn parse_col_identifier(ident: &str, header_map: &HashMap<String, usize>) -> usize {
-    let trimmed = ident.trim_matches('"');
-    if let Some(stripped) = trimmed.strip_prefix('$') {
-        stripped.parse::<usize>().unwrap_or_else(|_| exit_with_error("Invalid column number")) - 1
-    } else {
-        *header_map
-            .get(trimmed.to_uppercase().as_str())
-            .unwrap_or_else(|| exit_with_error(&format!("Column name '{}' not found in headers", trimmed)))
-    }
-}
-
 fn parse_match_arg(
     match_arg: &str,
     header_map: &HashMap<String, usize>,
@@ -132,57 +130,6 @@ fn parse_match_arg(
         }
     }
     matcher
-}
-
-fn parse_transform_arg(
-    transform_arg: &str,
-    header_map: &HashMap<String, usize>,
-) -> HashMap<usize, Vec<String>> {
-    let parsed: Value =
-        serde_json::from_str(transform_arg).expect("Invalid JSON in --transform argument");
-    let mut transforms = HashMap::new();
-    if let Value::Object(map) = parsed {
-        for (key, val) in map {
-            let col_index = parse_col_identifier(&key, header_map);
-            let ops = match val {
-                Value::String(s) => vec![s],
-                Value::Array(arr) => arr
-                    .into_iter()
-                    .map(|v| v.as_str().unwrap().to_string())
-                    .collect(),
-                _ => exit_with_error("--transform values must be strings or arrays of strings"),
-            };
-            transforms.insert(col_index, ops);
-        }
-    }
-    transforms
-}
-
-fn apply_transformers(row: &mut [String], transforms: &HashMap<usize, Vec<String>>) {
-    for (&col_idx, trans_list) in transforms {
-        if let Some(value) = row.get_mut(col_idx) {
-            for transformer in trans_list {
-                match transformer.as_str() {
-                    "$AGE_TO_DATE" => *value = parse_age_to_date(value),
-                    "$TO_LOWER" => *value = value.to_lowercase(),
-                    _ => {}
-                }
-            }
-        }
-    }
-}
-
-fn parse_age_to_date(value: &str) -> String {
-    let lowercase = value.to_lowercase();
-    let re = Regex::new(r"(\d+)[\s]*[a-z]*").unwrap();
-    if let Some(cap) = re.captures(&lowercase)
-        && let Some(num) = cap.get(1)
-    {
-        let number: i64 = num.as_str().parse().unwrap_or(0);
-        let timestamp = Utc::now() - Duration::days(number);
-        return timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
-    }
-    value.to_string()
 }
 
 fn main() {
